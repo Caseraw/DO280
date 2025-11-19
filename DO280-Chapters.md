@@ -353,8 +353,255 @@ oc annotate configmap ca-bundle service.beta.openshift.io/inject-cabundle=true
 ```
 
 ## Chapter 5, Expose non-HTTP/SNI Applications
+
+```shell
+oc expose deployment/virtual-rtsp-1 --type=LoadBalancer --target-port=8554
+oc get services
+nc -vz 192.168.50.20 8554
+```
+
+```shell
+oc debug node/master01 -- chroot /host ip addr
+```
+
+```yaml
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: custom
+spec:
+  config: |-
+    {
+      "cniVersion": "0.3.1",
+      "name": "custom",
+      "type": "host-device",
+      "device": "ens4",
+      "ipam": {
+        "type": "static",
+        "addresses": [
+          {"address": "192.168.51.10/24"}
+        ]
+      }
+    }
+```
+
+```yaml
+kind: Deployment
+metadata:
+  name: database
+spec:
+...output omitted...
+  template:
+    metadata:
+      annotations:
+        k8s.v1.cni.cncf.io/networks: custom
+...output omitted...
+```
+
+```shell
+oc get pod/database -o jsonpath='{.metadata.annotations.k8s\.v1\.cni\.cncf\.io/network-status}'
+```
+
 ## Chapter 6, Enable Developer Self-Service
+
+### Resource usage
+
+- Resource limits
+- Resource requests
+- Resource Quotas
+- Limit Ranges
+
+```shell
+oc create resourcequota example --hard=count/pods=1
+oc get limitrange,resourcequota -o yaml
+
+oc create quota memory \
+  --hard=requests.memory=2Gi,limits.memory=4Gi \
+  -n template-test
+```
+
+```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: example
+  namespace: example
+spec:
+  hard:
+    limits.cpu: "8"
+    limits.memory: 8Gi
+    requests.cpu: "4"
+    requests.memory: 4Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: example
+  namespace: example
+spec:
+  limits:
+  - default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 250m
+      memory: 256Mi
+    max:
+      cpu: "1"
+      memory: 1Gi
+    min:
+      cpu: 125m
+      memory: 128Mi
+    type: Container
+```
+
+```shell
+oc create clusterresourcequota example --project-label-selector=group=dev --hard=requests.cpu=10
+oc describe AppliedClusterResourceQuota -n example-2
+```
+
+```shell
+oc get event --sort-by .metadata.creationTimestamp
+oc adm top node
+oc describe node/master01
+
+oc set resources deployment test --requests=cpu=1
+oc set resources deployment test --limits=cpu=1
+```
+
+### Project template
+
+```shell
+oc adm create-bootstrap-project-template -o yaml
+```
+
+```yaml
+apiVersion: config.openshift.io/v1
+kind: Project
+metadata:
+...output omitted...
+  name: cluster
+spec:
+  projectRequestTemplate:
+    name: project-request
+```
+
+### Self provisioner
+
+```shell
+oc describe clusterrolebinding.rbac self-provisioners
+
+oc annotate clusterrolebinding/self-provisioners \
+  --overwrite rbac.authorization.kubernetes.io/autoupdate=false
+
+oc patch clusterrolebinding.rbac self-provisioners \
+  -p '{"subjects": null}'
+```
+
 ## Chapter 7, Manage Kubernetes Operators
+
+```shell
+oc get catalogsource -n openshift-marketplace
+oc get packagemanifests
+
+oc get co
+
+oc get subs
+oc get og
+oc get csv
+
+oc get installplan -n example-namespace <install-plan> -o yaml
+oc patch installplan <install-plan> --type merge -p '{"spec":{"approved":true}}' -n openshift-file-integrity
+```
+
 ## Chapter 8, Application Security
+
+```shell
+oc get scc
+oc describe scc anyuid
+
+oc get deployment deployment-name -o yaml | \
+    oc adm policy scc-subject-review -f -
+
+oc create serviceaccount service-account-name
+oc adm policy add-scc-to-user SCC -z service-account
+oc adm policy add-scc-to-user anyuid -z gitlab-sa
+oc adm policy add-scc-to-user privileged -z image-pruner
+oc set serviceaccount deployment/deployment-name service-account-name
+
+oc adm policy add-role-to-user cluster-role -z service-account
+oc adm policy add-cluster-role-to-user cluster-role service-account
+oc adm policy add-cluster-role-to-user cluster-admin -z image-pruner
+
+oc policy add-role-to-user edit \
+   system:serviceaccount:configmap-reloader:configmap-reloader-sa \
+   --rolebinding-name=reloader-edit \
+   -n appsec-api
+```
+
+```shell
+oc create job --dry-run=client -o yaml test \
+  --image=registry.access.redhat.com/ubi8/ubi:8.6 \
+  -- curl https://example.com
+
+oc create cronjob --dry-run=client -o yaml test \
+  --image=registry.access.redhat.com/ubi8/ubi:8.6 \
+  --schedule='0 0 * * *' \
+  -- curl https://example.com
+
+watch oc get cronjobs,jobs,pods
+
+# Example cron job definition:
+# ┌───────────────── minute (0 - 59)
+# │  ┌────────────── hour (0 - 23)
+# │  │   ┌────────── day of month (1 - 31)
+# │  │   │   ┌────── month (1 - 12) or jan,feb,mar,apr ...
+# │  │   │   │   ┌── day of week (0 - 7) or sun,mon,tue,wed,thu,fri,sat
+# │  │   │   │   │     (Sunday is 0 or 7)
+# m  h  dom mon dow  command
+  0 */2  *   *   *   /path/to/task_executable arguments
+
+Schedule specification	Description
+0 0 * * *	Run the specified task every day at midnight
+0 0 * * 7	Run the specified task every Sunday at midnight
+0 * * * *	Run the specified task every hour
+0 */4 * * *	Run the specified task every four hours
+```
+
 ## Chapter 9, OpenShift Updates
 
+- https://access.redhat.com/product-life-cycles/update_policies
+- https://access.redhat.com/support/policy/updates/openshift#ocp4_phases
+- https://access.redhat.com/labs
+- https://access.redhat.com/labs/ocpupgradegraph/update_path/
+
+```shell
+oc get machinehealthcheck -n openshift-machine-api
+
+oc annotate machinehealthcheck -n openshift-machine-api \
+  machine-api-termination-handler cluster.x-k8s.io/paused=""
+
+oc annotate machinehealthcheck -n openshift-machine-api \
+  machine-api-termination-handler cluster.x-k8s.io/paused-
+
+oc get clusterversion
+
+oc get clusteroperators
+
+oc patch clusterversion version --type="merge" \
+  --patch '{"spec":{"channel":"fast-4.14"}}'
+
+oc adm upgrade
+oc adm upgrade --to-latest=true
+```
+
+```shell
+oc api-resources
+oc get apirequestcounts 
+```
+
+```shell
+oc get sub -n openshift-operators web-terminal
+oc get installplan -n openshift-operators
+oc patch installplan <install-plan-name> --type merge --patch '{"spec":{"approved":true}}'
+```
