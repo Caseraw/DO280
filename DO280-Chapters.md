@@ -22,7 +22,6 @@ Course summary. OpenShift version 4.14.
 [user@host ~]$ kubectl create deployment db-pod --port 3306 \
   --image registry.ocp4.example.com:8443/rhel8/mysql-80
 
-
 [user@host ~]$ kubectl set env deployment/db-pod \
   MYSQL_USER='user1' \
   MYSQL_PASSWORD='mypa55w0rd' \
@@ -43,17 +42,18 @@ my-app
 ├── example_deployment.yaml
 └── service
     └── example_service.yaml
+```
 
+#### Create
+
+```shell
 [user@host ~]$ oc create -R -f ~/my-app
-deployment.apps/hello-openshift created
-service/hello-openshift created
 ```
 
 #### Update
 
 ```shell
-[user@host ~]$ oc apply -f ~/my-app/example-deployment.yaml \
-  --dry-run=server --validate=true
+[user@host ~]$ oc apply -f ~/my-app/example-deployment.yaml
 ```
 
 #### Validate
