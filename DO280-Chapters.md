@@ -1,4 +1,8 @@
-# DO280 Chapters
+# DO280
+
+Course summary. OpenShift version 4.14.
+
+# Chapters
 
 - Chapter 1, Declarative Resource Management
 - Chapter 2, Deploy Packaged Applications
@@ -320,14 +324,33 @@ spec:
   - from:
     - namespaceSelector:
         matchLabels:
+          policy-group.network.openshift.io/ingress: ""
+```
+
+```shell
+oc annotate service server \
+    service.beta.openshift.io/serving-cert-secret-name=server-secret
+
+oc get secret server-secret
+```
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+  namespace: my-namespace
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: server-secret
+...
+...
+...
 ```
 
 ```shell
 oc create configmap ca-bundle
 oc annotate configmap ca-bundle service.beta.openshift.io/inject-cabundle=true
-
 ```
-
 
 ## Chapter 5, Expose non-HTTP/SNI Applications
 ## Chapter 6, Enable Developer Self-Service
